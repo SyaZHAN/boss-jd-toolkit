@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JD 抓取助手</title>
+  <style>
+    :root {
+      --teal: #00C2B3;
+      --teal-dark: #0b8f84;
+      --bg: #ffffff;
+      --text: #1f2329;
+      --text-2: #646a73;
+      --border: #e5e6eb;
+      --warn: #ED7B2F;
+      --danger: #E34D59;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 340px;
+      font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      background: var(--teal);
+      color: #fff;
+    }
+    .header h1 { font-size: 15px; font-weight: 600; }
+    .header .count { font-size: 12px; opacity: .9; }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    button {
+      flex: 1;
+      padding: 8px 0;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: var(--teal); color: #fff; font-weight: 600; }
+    .btn-secondary { background: #f2f3f5; color: var(--text); }
+    .btn-danger { background: #fde8e9; color: var(--danger); }
+    .list { max-height: 320px; overflow-y: auto; padding: 8px 12px; }
+    .item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      gap: 8px;
+    }
+    .item:last-child { border-bottom: none; }
+    .item-info { flex: 1; min-width: 0; }
+    .item-name {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-meta {
+      font-size: 11px;
+      color: var(--text-2);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      margin-left: 6px;
+    }
+    .badge-incomplete { background: #fef3e4; color: var(--warn); }
+    .item-del {
+      border: none;
+      background: none;
+      color: var(--text-2);
+      font-size: 14px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      flex: 0 0 auto;
+    }
+    .item-del:hover { color: var(--danger); background: #fde8e9; }
+    .empty {
+      text-align: center;
+      color: var(--text-2);
+      font-size: 13px;
+      padding: 32px 0;
+      line-height: 1.8;
+    }
+    .footer {
+      padding: 10px 16px;
+      font-size: 11px;
+      color: var(--text-2);
+      background: #f7f8fa;
+      text-align: center;
+    }
+    .hidden { display: none; }
+    .toast {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.8);
+      color: #fff;
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 16px;
+      z-index: 99;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>JD 抓取助手</h1>
+    <span class="count" id="countText">0 条</span>
+  </div>
+
+  <div class="toolbar">
+    <button id="copyAll" class="btn-primary">复制全部</button>
+    <button id="exportFile" class="btn-secondary">导出JSON</button>
+    <button id="clearAll" class="btn-danger">清空</button>
+  </div>
+
+  <div class="list" id="list"></div>
+  <div class="empty hidden" id="emptyTip">还没有抓取记录<br>去 BOSS直聘 岗位详情页<br>点击右下角「抓取JD」按钮</div>
+
+  <div class="footer">数据仅存本地 · 抓取页面可见文本</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
