@@ -1,5 +1,5 @@
-// BOSS直聘 JD 抓取助手 — 内容脚本（v3：基于真实页面结构重写）
-// 支持：详情页抓取 + 列表页预览抓取 + 薪资字体解码 + 公司/地址抓取 + jobId 去重
+// BOSS直聘 & 智联招聘 JD 抓取助手 — 内容脚本（v4：双平台支持）
+// 支持：BOSS（详情页+列表预览）+ 智联（详情页） + 薪资字体解码 + jobId去重
 
 (() => {
   'use strict';
@@ -7,6 +7,30 @@
   const STORAGE_KEY = 'bossJdList';
   const FLOAT_BTN_ID = 'boss-jd-capture-btn';
   const TOAST_ID = 'boss-jd-toast';
+
+  // ---------- 平台检测 ----------
+  function getPlatform() {
+    const host = location.hostname;
+    if (/zhipin\.com$/.test(host)) return 'boss';
+    if (/zhaopin\.com$/.test(host)) return 'zhaopin';
+    return 'other';
+  }
+
+  function getPageType() {
+    const url = location.href;
+    const pf = getPlatform();
+    if (pf === 'boss') {
+      if (/\/job_detail\//.test(url)) return 'detail';
+      if (/\/web\/geek\/(jobs|recommend|search)/.test(url)) return 'list';
+      return 'other';
+    }
+    if (pf === 'zhaopin') {
+      if (/\/jobdetail\//.test(url)) return 'detail';
+      if (/\/(sou|jobs)\//.test(url)) return 'list';
+      return 'other';
+    }
+    return 'other';
+  }
 
   // ---------- 工具 ----------
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -220,6 +244,68 @@
     };
   }
 
+  // ---------- 智联招聘详情页抓取 ----------
+  function extractFromZhaopinDetail() {
+    const results = {};
+
+    // 岗位名：h1
+    results.jobName = (pickText(['h1', '.job-name', '.jobinfo__name', '.job-title']) || document.title).replace(/_智联招聘.*/, '').trim();
+
+    // 薪资
+    results.salary = pickText(['.summary-planes__salary', '.jobinfo__salary', '[class*="salary"]']);
+
+    // 公司名
+    results.company = pickText(['a.company-info__name', '.company-info__name', '.company__name', '[class*="company-name"] a', '[class*="company__name"]']);
+
+    // 地址
+    results.address = pickText(['.address-info__content', '.job-address', '[class*="address"]']);
+
+    // 城市/经验标签：从 summary planes 或 meta 区域
+    results.limitText = pickText(['.summary-planes__info', '.jobinfo__other-info', '.job-require', '[class*="summary-planes"]']);
+
+    // JD 描述：智联的 JD 直接渲染在 body 中，包含"职位描述"标识字
+    // 找到职位描述后面的内容区域
+    const descContainer = pick([
+      '.job-detail__content',
+      '.job-detail',
+      '.job-description',
+      '.job-desc',
+      '[class*="job-detail"]',
+      '[class*="job-description"]',
+      '.seo-card'
+    ]);
+    if (descContainer) {
+      results.fullText = (descContainer.innerText || descContainer.textContent || '').trim();
+    } else {
+      // 兜底：扫描所有包含"职位描述"的容器
+      const anchors = [...document.querySelectorAll('*')].filter(el =>
+        el.textContent.trim() === '职位描述' && el.children.length === 0
+      );
+      if (anchors.length > 0) {
+        // 从"职位描述"的祖先容器取全部文本
+        let parent = anchors[0].parentElement;
+        for (let i = 0; i < 5 && parent; i++) {
+          const t = (parent.innerText || '').trim();
+          if (t.length > 200) { results.fullText = t; break; }
+          parent = parent.parentElement;
+        }
+      }
+      if (!results.fullText) {
+        // 最后兜底：body 文本（去掉 header/footer 噪音）
+        const body = document.body.innerText || '';
+        const idx = body.indexOf('职位描述');
+        results.fullText = idx >= 0 ? body.slice(idx) : body.slice(0, 3000);
+      }
+    }
+
+    // jobId 从 URL 提取
+    const idMatch = location.href.match(/CC(\d+)\.htm/i) || location.href.match(/jobdetail\/([A-Za-z0-9]+)/);
+    results.jobId = idMatch ? (idMatch[1] || idMatch[0].match(/CC\d+/)?.[0]) : null;
+
+    results.url = location.href.split('?')[0];
+    return results;
+  }
+
   // ---------- 自动展开折叠 ----------
   async function expandDescription(root = document) {
     const candidates = [
@@ -261,22 +347,33 @@
 
   // ---------- 主抓取流程 ----------
   async function capture() {
-    const pageType = getPageType();
-    if (pageType === 'other') {
-      showToast('请在岗位详情页或列表页抓取', 'warn');
-      return;
+    const pt = getPlatform();
+    const pg = getPageType();
+
+    if (pt === 'boss') {
+      if (pg === 'other') { showToast('请在岗位详情页或列表页抓取', 'warn'); return; }
+    } else if (pt === 'zhaopin') {
+      if (pg === 'list') { showToast('请进入岗位详情页再抓取', 'warn'); return; }
+      if (pg === 'other') { showToast('请在智联招聘岗位详情页抓取', 'warn'); return; }
+    } else {
+      showToast('当前网站不支持抓取', 'warn'); return;
     }
 
     showToast('抓取中…');
-    if (pageType === 'detail') {
+    if (pt === 'boss' && pg === 'detail') {
       await expandDescription();
-    } else {
+    } else if (pt === 'boss') {
       const previewRoot = pick(['.job-detail-box', '.job-detail-container']) || document;
       await expandDescription(previewRoot);
     }
     await sleep(200);
 
-    const d = pageType === 'detail' ? extractFromDetail() : extractFromListPreview();
+    let d;
+    if (pt === 'boss') {
+      d = pg === 'detail' ? extractFromDetail() : extractFromListPreview();
+    } else {
+      d = extractFromZhaopinDetail();
+    }
     if (!d.fullText && !d.jobName) {
       showToast('解析失败：未识别到岗位信息（页面结构可能已改）', 'error');
       return;
@@ -285,19 +382,20 @@
     const complete = d.fullText.length > 80;
     const source = d.address || d.company || '';
 
-    // 去重：jobId + 薪资 + 地址/公司（避免同名岗位误判）
+    // 去重：平台 + jobId + 薪资 + 地址/公司
     let fpSource;
     if (d.jobId) {
-      fpSource = `${pageType}|${d.jobId}|${d.salary}|${source}`;
+      fpSource = `${pt}|${d.jobId}|${d.salary}|${source}`;
     } else {
-      fpSource = `${pageType}|${d.company}|${d.jobName}|${d.salary}|${d.url.split('?')[0]}`;
+      fpSource = `${pt}|${d.company}|${d.jobName}|${d.salary}|${d.url.split('?')[0]}`;
     }
     const fingerprint = simpleHash(fpSource);
 
     const record = {
       id: fingerprint + '-' + Date.now().toString(36),
       fingerprint,
-      source: pageType,
+      platform: pt,
+      source: pt === 'boss' ? pg : 'detail',
       url: d.url,
       jobId: d.jobId,
       company: d.company || '未知公司',
@@ -353,12 +451,20 @@
   function ensureFloatingButton() {
     if (document.getElementById(FLOAT_BTN_ID)) return;
 
-    const pageType = getPageType();
-    if (pageType === 'other') return;
+    const pt = getPlatform();
+    const pg = getPageType();
+    if (pt === 'other') return;
+
+    // 按钮文案按平台自动切换
+    let label, shortcut = '';
+    if (pt === 'boss' && pg === 'list') { label = '抓取预览'; shortcut = '或 ⌘⇧J'; }
+    else if (pt === 'boss') { label = '抓取JD'; shortcut = '或 ⌘⇧J'; }
+    else if (pt === 'zhaopin' && pg === 'detail') { label = '抓取智联JD'; shortcut = '或 ⌘⇧J'; }
+    else if (pt === 'zhaopin') { label = '进入详情页'; shortcut = ''; }
 
     const btn = document.createElement('div');
     btn.id = FLOAT_BTN_ID;
-    btn.innerHTML = pageType === 'list' ? '抓取预览<br><span style="font-size:10px;font-weight:400;opacity:0.7">或 ⌘⇧J</span>' : '抓取JD<br><span style="font-size:10px;font-weight:400;opacity:0.7">或 ⌘⇧J</span>';
+    btn.innerHTML = shortcut ? `${label}<br><span style="font-size:10px;font-weight:400;opacity:0.7">${shortcut}</span>` : label;
     Object.assign(btn.style, {
       position: 'fixed', right: '24px', bottom: '120px', zIndex: '2147483647',
       background: '#00C2B3', color: '#fff', border: 'none', borderRadius: '24px',

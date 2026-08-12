@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "BOSS直聘 JD 抓取助手",
-  "version": "1.0.0",
-  "description": "在 BOSS直聘 岗位页一键抓取 JD 全文到本地，自动展开折叠、去重，供求职分析使用",
+  "name": "招聘 JD 抓取助手 (BOSS+智联)",
+  "version": "1.1.0",
+  "description": "在 BOSS直聘 / 智联招聘 岗位页一键抓取 JD 全文到本地，自动去重，供求职分析使用",
   "permissions": ["storage", "downloads"],
-  "host_permissions": ["https://www.zhipin.com/*", "https://*.zhipin.com/*"],
+  "host_permissions": ["https://www.zhipin.com/*", "https://*.zhipin.com/*", "https://*.zhaopin.com/*", "https://www.zhaopin.com/*"],
   "action": {
     "default_popup": "popup.html",
     "default_title": "JD 抓取助手",
@@ -21,7 +21,7 @@
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.zhipin.com/*", "https://*.zhipin.com/*"],
+      "matches": ["https://www.zhipin.com/*", "https://*.zhipin.com/*", "https://*.zhaopin.com/*", "https://www.zhaopin.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
