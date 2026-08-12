@@ -38,11 +38,14 @@
     return _replace.apply(history, arguments);
   };
 
-  // 也拦截 location 直接跳转（很少见但防御）
-  // location setter 无法直接拦截，但可覆盖 assign/replace
-  const _assign = window.location.assign.bind(window.location);
-  window.location.assign = function (url) {
-    if (capturing) return;
-    return _assign(url);
-  };
+  // 也拦截 location 直接跳转（Location 对象是只读，assign/replace 无法直接赋值）
+  // 用 defineProperty 绕过（configurable:true 才能覆盖），失败时降级
+  try {
+    const _assign = window.location.assign.bind(window.location);
+    Object.defineProperty(window.location, 'assign', {
+      configurable: true,
+      writable: true,
+      value: function (url) { if (capturing) return; return _assign(url); }
+    });
+  } catch (e) { /* 严格模式下降级，不致命 */ }
 })();
