@@ -25,7 +25,7 @@
       return 'other';
     }
     if (pf === 'zhaopin') {
-      if (/\/jobdetail\//.test(url)) return 'detail';
+      if (/\/job_?detail\//.test(url)) return 'detail';
       if (/\/(sou|jobs)\//.test(url)) return 'list';
       return 'other';
     }
@@ -299,7 +299,7 @@
     }
 
     // jobId 从 URL 提取
-    const idMatch = location.href.match(/CC(\d+)\.htm/i) || location.href.match(/jobdetail\/([A-Za-z0-9]+)/);
+    const idMatch = location.href.match(/CC(\d+)\.htm/i) || location.href.match(/job_?detail\/([A-Za-z0-9]+)/);
     results.jobId = idMatch ? (idMatch[1] || idMatch[0].match(/CC\d+/)?.[0]) : null;
 
     results.url = location.href.split('?')[0];
