@@ -52,6 +52,42 @@ Inform the user of the final weights used and allow adjustment.
 
 ## Complete Workflow
 
+### Step 0: Resume Bootstrap — Guided Interview for First-Time Resume Writers
+
+When the user has no resume or only vague fragments, run a structured interview to build one from scratch. This takes 5–10 minutes and produces a baseline good enough for JD matching.
+
+**Trigger**: User says "I don't have a resume", "never written one", "not sure what to include", provides only a job title and education, or otherwise indicates they need help building their resume.
+
+**Process**: Ask questions in four rounds, one round at a time. Keep each question short; allow the user to skip or say "not applicable". When a category yields nothing, mark it as a gap rather than guessing.
+
+**Round 1 — Personal Snapshot** (1 question each)
+1. Highest education level and major? Graduation year?
+2. Total years of work experience? Current employment status?
+3. What role/industry are you targeting? Any dream companies?
+
+**Round 2 — Work History** (iterate for each past job)
+For each position the user has held, ask:
+- Company name and your title? Duration (start–end)?
+- What were your 2–3 main responsibilities? (Prompt: "What did you do on a typical day?")
+- What was the biggest problem you solved there?
+- Any numbers you remember? (Revenue, users, team size, efficiency gains — rough estimates OK)
+- Why did you leave? (Helps flag employment gaps)
+
+**Round 3 — Projects & Skills**
+- Any side projects, open source contributions, freelance work, or personal apps? (This is where career changers and juniors often shine)
+- What tools, languages, or software are you comfortable with? (Prompt with categories: design tools, coding languages, office software, AI tools, domain-specific tools)
+- Any certifications, courses, or training worth mentioning?
+
+**Round 4 — Soft Skills & Achievements**
+- Have you ever led a team, mentored someone, or managed a project end-to-end?
+- Describe a time you dealt with a difficult stakeholder or resolved a conflict.
+- What's the accomplishment you're most proud of, professional or personal?
+- Anything else you think an employer should know? (Last chance for unstructured input)
+
+**After the interview**, synthesize all answers into a structured resume baseline using the four-dimensional framework from Step 1. Be explicit about which parts are "confirmed" vs "estimated" vs "gaps to clarify." Inform the user they can refine any part.
+
+Then proceed to Step 1 as normal — the interview output serves as the source material for baseline creation.
+
 ### Step 1: Establish the Resume Baseline Library
 
 If no baseline exists, create one from the user's resume. The baseline serves as the single source of truth for all subsequent JD matching.
