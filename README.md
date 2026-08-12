@@ -75,6 +75,14 @@ boss-jd-toolkit/
 - JD 分析：WorkBuddy Skill · 四维框架 · 加权评分
 - 数据流：本地存储 (chrome.storage) → JSON → WorkBuddy 对话分析
 
+## 更新 skill
+
+WorkBuddy 目前不会自动更新已安装的 skill。如果 GitHub 仓库有更新：
+
+1. 拉取最新代码：`git pull`（或重新下载 SKILL.md）
+2. 用新的 `jd-matcher-skill/SKILL.md` 替换 WorkBuddy 技能目录中的同名文件
+3. 技能目录位置：`~/.workbuddy/skills/jd-matcher/SKILL.md`（Mac）/ `%USERPROFILE%\.workbuddy\skills\jd-matcher\SKILL.md`（Windows）
+
 ## License
 
 MIT
