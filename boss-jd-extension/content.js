@@ -26,6 +26,8 @@
     }
     if (pf === 'zhaopin') {
       if (/\/job_?detail\//.test(url)) return 'detail';
+      // DOM 特征兜底：详情页必有岗位标题标签+薪资摘要；URL 无论如何都能识别
+      if (document.querySelector('h1') && document.querySelector('.summary-planes__salary')) return 'detail';
       if (/\/(sou|jobs)\//.test(url)) return 'list';
       return 'other';
     }
