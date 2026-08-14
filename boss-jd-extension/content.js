@@ -72,14 +72,6 @@
     return [...text].map((ch) => (map[ch] !== undefined ? map[ch] : ch)).join('');
   }
 
-  // ---------- 页面类型识别 ----------
-  function getPageType() {
-    const url = location.href;
-    if (/\/job_detail\//.test(url)) return 'detail';
-    if (/\/web\/geek\/(jobs|recommend|search)/.test(url)) return 'list';
-    return 'other';
-  }
-
   // ---------- 公司名抓取 ----------
   function extractCompany(root) {
     const candidates = [
