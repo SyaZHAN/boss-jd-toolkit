@@ -25,10 +25,11 @@
       return 'other';
     }
     if (pf === 'zhaopin') {
-      if (/\/job_?detail\//.test(url)) return 'detail';
-      // DOM 特征兜底：详情页必有岗位标题标签+薪资摘要；URL 无论如何都能识别
+      // 详情页：URL 含 job_detail / CCxxx.htm，或 DOM 有岗位标题+薪资摘要
+      if (/\/job_?detail\//.test(url) || /CC\d+\.htm/i.test(url)) return 'detail';
       if (document.querySelector('h1') && document.querySelector('.summary-planes__salary')) return 'detail';
-      if (/\/(sou|jobs)\//.test(url)) return 'list';
+      // 列表页：搜索主域 sou.zhaopin.com，或 URL 含 /sou/ 路径
+      if (/^sou\./i.test(location.hostname) || /\/sou\//.test(url)) return 'list';
       return 'other';
     }
     return 'other';
@@ -300,6 +301,47 @@
     return results;
   }
 
+  // ---------- 智联招聘列表页抓取（批量元数据，全文需进详情页补齐） ----------
+  function extractFromZhaopinList() {
+    const results = [];
+    const seen = new Set();
+
+    // 以指向岗位详情的链接为锚点（CCxxx.htm / job_detail 是稳定信号）
+    const links = [...document.querySelectorAll('a[href*="CC"], a[href*="job_"], a[href*="jobs.zhaopin.com"]')]
+      .filter((a) => /CC\d+\.htm/i.test(a.href) || /job_?detail\//i.test(a.href));
+
+    for (const link of links) {
+      const jobName = (link.innerText || link.textContent || '').trim();
+      if (!jobName || jobName.length < 2) continue;
+
+      const url = link.href.split('?')[0];
+      const m = url.match(/CC(\d+)\.htm/i) || url.match(/job_?detail\/([A-Za-z0-9]+)/i);
+      const jobId = m ? (m[1] || m[0]) : null;
+
+      // 卡片根 = 向上找包含薪资/公司等完整信息的祖先容器（最多 6 层）
+      let card = link.parentElement;
+      for (let i = 0; i < 6 && card; i++) {
+        const t = (card.innerText || '').trim();
+        if (t.length > 40) break;
+        card = card.parentElement;
+      }
+      card = card || link.parentElement;
+
+      const salary = pickText(['[class*="salary"]', '.jobinfo__salary', '.salary'], card);
+      const company = pickText(['[class*="company"]', '[class*="companyinfo"]'], card);
+      const address = pickText(['[class*="address"]', '[class*="area"]', '[class*="location"]'], card);
+      const limitText = pickText(['[class*="demand"]', '[class*="require"]', '[class*="education"]', '[class*="experience"]'], card);
+
+      const key = jobName + '|' + company + '|' + salary;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      results.push({ url, jobId, jobName, salary, company, address, limitText, fullText: '' });
+    }
+
+    return results;
+  }
+
   // ---------- 自动展开折叠 ----------
   async function expandDescription(root = document) {
     const candidates = [
@@ -339,49 +381,16 @@
     await chrome.storage.local.set({ [STORAGE_KEY]: list });
   }
 
-  // ---------- 主抓取流程 ----------
-  async function capture() {
-    const pt = getPlatform();
-    const pg = getPageType();
-
-    if (pt === 'boss') {
-      if (pg === 'other') { showToast('请在岗位详情页或列表页抓取', 'warn'); return; }
-    } else if (pt === 'zhaopin') {
-      if (pg === 'list') { showToast('请进入岗位详情页再抓取', 'warn'); return; }
-      if (pg === 'other') { showToast('请在智联招聘岗位详情页抓取', 'warn'); return; }
-    } else {
-      showToast('当前网站不支持抓取', 'warn'); return;
-    }
-
-    showToast('抓取中…');
-    if (pt === 'boss' && pg === 'detail') {
-      await expandDescription();
-    } else if (pt === 'boss') {
-      const previewRoot = pick(['.job-detail-box', '.job-detail-container']) || document;
-      await expandDescription(previewRoot);
-    }
-    await sleep(200);
-
-    let d;
-    if (pt === 'boss') {
-      d = pg === 'detail' ? extractFromDetail() : extractFromListPreview();
-    } else {
-      d = extractFromZhaopinDetail();
-    }
-    if (!d.fullText && !d.jobName) {
-      showToast('解析失败：未识别到岗位信息（页面结构可能已改）', 'error');
-      return;
-    }
-
+  // ---------- 单条记录构建 + 去重 + 保存 ----------
+  async function saveRecord(d, pt, source) {
     const complete = d.fullText.length > 80;
-    const source = d.address || d.company || '';
 
-    // 去重：平台 + jobId + 薪资 + 地址/公司
+    // 去重指纹：优先用 jobId（跨列表/详情页稳定，便于「列表元数据 → 详情全文」合并更新）
     let fpSource;
     if (d.jobId) {
-      fpSource = `${pt}|${d.jobId}|${d.salary}|${source}`;
+      fpSource = `${pt}|${d.jobId}`;
     } else {
-      fpSource = `${pt}|${d.company}|${d.jobName}|${d.salary}|${d.url.split('?')[0]}`;
+      fpSource = `${pt}|${d.company}|${d.jobName}|${d.salary}|${(d.url || '').split('?')[0]}`;
     }
     const fingerprint = simpleHash(fpSource);
 
@@ -389,8 +398,8 @@
       id: fingerprint + '-' + Date.now().toString(36),
       fingerprint,
       platform: pt,
-      source: pt === 'boss' ? pg : 'detail',
-      url: d.url,
+      source,
+      url: d.url || '',
       jobId: d.jobId,
       company: d.company || '未知公司',
       jobName: d.jobName || '未知岗位',
@@ -408,17 +417,79 @@
     if (dupIndex >= 0) {
       const old = list[dupIndex];
       if (old.fullText.length >= record.fullText.length && old.complete) {
-        showToast(`已跳过重复：${record.jobName}`, 'warn');
-        return;
+        return 'skipped';
       }
       list[dupIndex] = record;
       await saveList(list);
-      showToast(`已更新：${record.jobName}`, 'ok');
-    } else {
-      list.push(record);
-      await saveList(list);
-      showToast(`已抓取 ${record.jobName}（共 ${list.length} 条）`, 'ok');
+      return 'updated';
     }
+    list.push(record);
+    await saveList(list);
+    return 'saved';
+  }
+
+  // ---------- 主抓取流程 ----------
+  async function capture() {
+    const pt = getPlatform();
+    const pg = getPageType();
+
+    if (pt === 'boss') {
+      if (pg === 'other') { showToast('请在岗位详情页或列表页抓取', 'warn'); return; }
+    } else if (pt === 'zhaopin') {
+      if (pg === 'other') { showToast('请在智联招聘岗位页抓取', 'warn'); return; }
+    } else {
+      showToast('当前网站不支持抓取', 'warn'); return;
+    }
+
+    showToast('抓取中…');
+
+    // BOSS 详情/列表需先展开折叠文案
+    if (pt === 'boss') {
+      if (pg === 'detail') {
+        await expandDescription();
+      } else {
+        const previewRoot = pick(['.job-detail-box', '.job-detail-container']) || document;
+        await expandDescription(previewRoot);
+      }
+      await sleep(200);
+    }
+
+    // 智联列表页：批量抓取卡片元数据（列表页无完整 JD，全文需进详情页补齐）
+    if (pt === 'zhaopin' && pg === 'list') {
+      const cards = extractFromZhaopinList();
+      if (cards.length === 0) {
+        showToast('未识别到岗位列表（页面结构可能已改）', 'error');
+        return;
+      }
+      let saved = 0, updated = 0, skipped = 0;
+      for (const c of cards) {
+        const r = await saveRecord(c, pt, 'list');
+        if (r === 'saved') saved++;
+        else if (r === 'updated') updated++;
+        else skipped++;
+      }
+      const parts = [`新增 ${saved} 条`];
+      if (updated) parts.push(`更新 ${updated} 条`);
+      if (skipped) parts.push(`跳过重复 ${skipped} 条`);
+      showToast(`列表抓取完成：${parts.join('，')}`, 'ok');
+      return;
+    }
+
+    // 单条抓取：BOSS 详情/列表预览、智联详情
+    let d;
+    if (pt === 'boss') {
+      d = pg === 'detail' ? extractFromDetail() : extractFromListPreview();
+    } else {
+      d = extractFromZhaopinDetail();
+    }
+    if (!d.fullText && !d.jobName) {
+      showToast('解析失败：未识别到岗位信息（页面结构可能已改）', 'error');
+      return;
+    }
+    const r = await saveRecord(d, pt, pg);
+    if (r === 'skipped') showToast(`已跳过重复：${d.jobName}`, 'warn');
+    else if (r === 'updated') showToast(`已更新：${d.jobName}`, 'ok');
+    else showToast(`已抓取 ${d.jobName}`, 'ok');
   }
 
   // ---------- 抓取触发：键盘快捷键（100% 不跳转）+ 悬浮按钮（备选） ----------
@@ -454,6 +525,7 @@
     if (pt === 'boss' && pg === 'list') { label = '抓取预览'; shortcut = '或 ⌘⇧J'; }
     else if (pt === 'boss') { label = '抓取JD'; shortcut = '或 ⌘⇧J'; }
     else if (pt === 'zhaopin' && pg === 'detail') { label = '抓取智联JD'; shortcut = '或 ⌘⇧J'; }
+    else if (pt === 'zhaopin' && pg === 'list') { label = '批量抓取列表'; shortcut = '或 ⌘⇧J'; }
     else if (pt === 'zhaopin') { label = '进入详情页'; shortcut = ''; }
 
     const btn = document.createElement('div');

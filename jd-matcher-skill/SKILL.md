@@ -174,7 +174,7 @@ Output includes:
 - Requirement → Selling Point mapping table
 - Rewritten summary for resume header
 - Experience descriptions rewritten in JD language
-- BOSS Zhipin / LinkedIn greeting message (≤150 chars)
+- BOSS Zhipin / LinkedIn greeting message (≤120 chars)
 - Interview Q&A preparation:
   - Employment gap explanation
   - Cross-industry pivot justification
